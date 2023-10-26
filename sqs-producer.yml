@@ -1,0 +1,172 @@
+AWSTemplateFormatVersion: '2010-09-09'
+
+Description: SQS queues for audit events
+
+Parameters:
+  Environments:
+    Description: 'The environment type'
+    Type: 'String'
+    AllowedValues:
+      - 'dev'
+      - 'build'
+      - 'staging'
+      - 'integration'
+      - 'production'
+    ConstraintDescription: must be dev, build, staging, integration or production
+
+Mappings:
+  TxMAAccounts:
+    dev: 
+      AUDIT: arn:aws:iam::248098332657:root
+    build: 
+      AUDIT: arn:aws:iam::750703655225:root
+    staging: 
+      AUDIT: arn:aws:iam::178023842775:root
+    integration: 
+      AUDIT: arn:aws:iam::729485541398:root
+    production: 
+      AUDIT: arn:aws:iam::451773080033:root
+
+Resources:
+  TxMASQSAuditEventQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600 # 14 days in seconds
+      QueueName: !Sub '${AWS::StackName}-AuditEventQueue'
+      KmsMasterKeyId: !Ref TxMASQSAuditQueueEncryptionKeyAlias
+      RedrivePolicy:
+        deadLetterTargetArn: !GetAtt TxMAAuditEventDeadLetterQueue.Arn
+        maxReceiveCount: 5
+      Tags:
+        - Key: 'AuthoredBy'
+          Value: 'TxMA'
+        - Key: 'ProducerType'
+          Value: 'SQS'
+
+  TxMASQSAuditQueuePolicy:
+    Type: AWS::SQS::QueuePolicy
+    Properties:
+      Queues:
+        - !Ref TxMASQSAuditEventQueue
+      PolicyDocument:
+        Statement:
+          - Sid: 'AllowReadByTxMAAccount'
+            Effect: Allow
+            Principal:
+              AWS: !FindInMap [TxMAAccountARN, Environment, !Ref 'Environment']
+            Action:
+              - 'sqs:DeleteMessage'
+              - 'sqs:GetQueueAttributes'
+              - 'sqs:ChangeMessageVisibility'
+              - 'sqs:ReceiveMessage'
+            Resource: !GetAtt TxMASQSAuditEventQueue.Arn
+
+  TxMAAuditEventDeadLetterQueue:
+    Type: AWS::SQS::Queue
+    Properties:
+      MessageRetentionPeriod: 1209600 # 14 days in seconds
+      KmsMasterKeyId: !Ref TxMASQSAuditQueueEncryptionKeyAlias
+
+  TxMASQSQueueEncryptionKey:
+    Type: AWS::KMS::Key
+    Properties:
+      Description: Symmetric key used to encrypt TxMA audit messages at rest in SQS
+      Enabled: true
+      KeyPolicy:
+        Version: '2012-10-17'
+        Statement:
+          - Effect: Allow
+            Principal:
+              AWS: !Sub 'arn:aws:iam::${AWS::AccountId}:root'
+            Action:
+              - 'kms:*'
+            Resource: '*'
+          - Effect: Allow
+            Principal:
+              AWS: !FindInMap [TxMAAccounts, !Ref Environments, AUDIT]
+            Action:
+              - kms:Encrypt
+              - kms:Decrypt
+              - kms:GenerateDataKey
+            Resource: '*'
+      KeySpec: SYMMETRIC_DEFAULT
+      KeyUsage: ENCRYPT_DECRYPT
+      MultiRegion: false
+      PendingWindowInDays: 7
+      Tags:
+        - Key: KeyType
+          Value: Encryptiom Key
+        - Key: Environments
+          Value: !Sub ${Environments}
+
+  TxMASQSAuditEncryptionKeyAlias:
+    Type: AWS::KMS::Alias
+    Properties:
+      AliasName: !Sub alias/${AWS::StackName}/AuditEventEncryptionKey
+      TargetKeyId: !Ref TxMASQSProducerAuditEventQueueEncryptionKey
+
+  KMSARNParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${AWS::StackName}/KMSARN'
+      Type: String
+      Value: !Sub '${TxMASQSProducerAuditEventQueueEncryptionKey.Arn}'
+      Description: ARN of the KMS key used for encryption.
+      Tags:
+        AuthoredBy: TxMA
+        ProducerType: SQS
+
+  SQSQueueARNParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${AWS::StackName}/QueueARN'
+      Type: String
+      Value: !Sub '${TxMASQSProducerAuditEventQueue.Arn}'
+      Description: ARN of the queue to submit events to.
+      Tags:
+        AuthoredBy: TxMA
+        ProducerType: SQS
+
+  SQSQueueNameParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${AWS::StackName}/QueueName'
+      Type: String
+      Value: !Sub '${TxMASQSProducerAuditEventQueue.QueueName}'
+      Description: Name of the queue to submit events to.
+      Tags:
+        AuthoredBy: TxMA
+        ProducerType: SQS
+
+  SQSQueueURLParameter:
+    Type: AWS::SSM::Parameter
+    Properties:
+      Name: !Sub '/${AWS::StackName}/QueueURL'
+      Type: String
+      Value: !Sub '${TxMASQSProducerAuditEventQueue.QueueUrl}'
+      Description: URL of the queue to submit events to.
+      Tags:
+        AuthoredBy: TxMA
+        ProducerType: SQS
+
+Outputs:
+  KMSARN:
+    Description: 'ARN of the KMS key used for encryption.'
+    Value: !Sub '${TxMASQSProducerAuditEventQueueEncryptionKey.Arn}'
+    Export:
+      Name: !Sub '${AWS::StackName}-KMSARN'
+  QueueARN:
+    Description: 'ARN of the queue to submit events to.'
+    Value: !Sub '${TxMASQSProducerAuditEventQueue.Arn}'
+    Export:
+      Name: !Sub '${AWS::StackName}-QueueARN'
+  QueueName:
+    Description: 'Name of the queue to submit events to.'
+    Value: !Sub '${TxMASQSProducerAuditEventQueue.QueueName}'
+    Export:
+      Name: !Sub '${AWS::StackName}-QueueName'
+  QueueURL:
+    Description: 'URL of the queue to submit events to.'
+    Value: !Sub '${TxMASQSProducerAuditEventQueue.QueueUrl}'
+    Export:
+      Name: !Sub '${AWS::StackName}-QueueURL'
