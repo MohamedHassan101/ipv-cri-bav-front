@@ -150,23 +150,43 @@ Resources:
         ProducerType: SQS
 
 Outputs:
-  KMSARN:
-    Description: 'ARN of the KMS key used for encryption.'
-    Value: !Sub '${TxMASQSProducerAuditEventQueueEncryptionKey.Arn}'
+  BAVApiGatewayId:
+    Description: "API GatewayID of the BAV CRI API"
+    Value: !Sub "${BAVRestApi}"
     Export:
-      Name: !Sub '${AWS::StackName}-KMSARN'
-  QueueARN:
-    Description: 'ARN of the queue to submit events to.'
-    Value: !Sub '${TxMASQSProducerAuditEventQueue.Arn}'
+      Name: !Sub ${AWS::StackName}-BAVApiGatewayId
+  BAVBackendURL:
+    Description: "BAV Backend URL"
+    Value: !Sub
+      - "https://${CustomDomainName}"
+      - CustomDomainName: !Ref BAVApiCustomDomainName
     Export:
-      Name: !Sub '${AWS::StackName}-QueueARN'
-  QueueName:
-    Description: 'Name of the queue to submit events to.'
-    Value: !Sub '${TxMASQSProducerAuditEventQueue.QueueName}'
+      Name: !Sub ${AWS::StackName}-BAVBackendURL
+  TxMASQSQueue:
+    Description: "Arn of the TxMASQSQueue"
+    Value: !GetAtt TxMASQSQueue.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-QueueName'
-  QueueURL:
-    Description: 'URL of the queue to submit events to.'
-    Value: !Sub '${TxMASQSProducerAuditEventQueue.QueueUrl}'
+      Name: !Sub ${AWS::StackName}-TxMASQSQueue-arn
+  TxMAKMSEncryptionKey:
+    Description: "Arn of the TxMAKMSEncryptionKey"
+    Value: !GetAtt TxMAKMSEncryptionKey.Arn
     Export:
-      Name: !Sub '${AWS::StackName}-QueueURL'
+      Name: !Sub ${AWS::StackName}-TxMAKMSEncryptionKey-arn
+  SessionTableName:
+    Description: "Name of the Session DynamoDB table"
+    Value:
+      Fn::ImportValue: !Sub "${L2DynamoStackName}-session-table-name"
+    Export:
+      Name: !Sub ${AWS::StackName}-SessionTable-name
+  SessionTableARN:
+    Description: "Arn of the Session DynamoDB table"
+    Value:
+      Fn::ImportValue: !Sub "${L2DynamoStackName}-session-table-arn"
+    Export:
+      Name: !Sub ${AWS::StackName}-SessionTable-arn
+  SessionTableEcryptionARN:
+    Description: "Arn of the SessionTableEncryptionKey"
+    Value:
+      Fn::ImportValue: !Sub "${L2DynamoStackName}-session-table-key-arn"
+    Export:
+      Name: !Sub ${AWS::StackName}-SessionTableEncryptionKey-arn
