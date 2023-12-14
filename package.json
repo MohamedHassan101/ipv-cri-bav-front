@@ -76,7 +76,7 @@
     "nunjucks": "3.2.4",
     "nyc": "15.1.0",
     "playwright": "1.35.1",
-    "wait-on": "7.0.1",
+    "wait-on": "7.2.0",
     "reqres": "3.0.1"
   }
 }
